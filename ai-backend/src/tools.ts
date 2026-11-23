@@ -1,18 +1,32 @@
-import express from "express";
+import { tool } from "ai";
+import { z } from "zod";
+import { db } from "./database.js";
 
-const app = express();
+export const getFacturation = tool({
+  description: "Récupère les factures d'un client par son nom",
 
-const PORT = 3000;
+  inputSchema: z.object({
+    nom: z.string().trim().min(1).describe("Nom du client recherché"),
+  }),
 
-app.use(express.json());
+  execute: async ({ nom }) => {
+    const factures = db
+      .prepare(
+        `
+      SELECT
+        c.nom,
+        f.numero,
+        f.montant,
+        f.date_facture,
+        f.statut
+      FROM facture f
+      JOIN client c ON c.id = f.client_id
+      WHERE c.nom LIKE ? ESCAPE '\\'
+      ORDER BY f.date_facture, f.id
+    `,
+      )
+      .all(`%${nom.trim().replace(/[\\%_]/g, "\\$&")}%`);
 
-app.get("/api/health", (req, res) => {
-  res.status(200).json({
-    status: "ok",
-    messages: "Serveur tourne",
-  });
-});
-
-app.listen(PORT, () => {
-  console.log(`Tools running on http://localhost:${PORT}`);
+    return factures;
+  },
 });
